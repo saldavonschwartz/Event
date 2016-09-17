@@ -29,39 +29,39 @@
 
 #include <functional>
 #include <unordered_map>
-#include <map>
+#include <vector>
 
 namespace OXFEDE {
 
-	template<class OwnerT, class KeyT, class SigT>
+	template <class OwnerT, class KeyT, class SigT>
 	class Event;
 
-	template<class OwnerT, class KeyT, class RetT, class... ArgTs>
-	class Event<OwnerT, KeyT, RetT(ArgTs...)> {
+	template <class OwnerT, class KeyT, class RetT, class... ParamTs>
+	class Event<OwnerT, KeyT, RetT(ParamTs...)> {
 
 		friend OwnerT;
-		
-		template <class KeyT2, class EType>
-		friend struct std::pair;
+
+		template <class OwnerT2, class IdxT2, class KeyT2, class SigT2>
+		friend class MultiEvent;
 
 	public:
-		using Delegate = std::function<RetT(ArgTs...)>;
+		using Delegate = std::function<RetT(ParamTs...)>;
 
 		struct Binding {
 			KeyT key;
 			Delegate delegate;
 
-			Binding(KeyT key, Delegate delegate) :
-				key(key),
-				delegate(delegate) {
+			Binding(KeyT key, Delegate delegate) {
+				this->key = key;
+				this->delegate = delegate;
 			}
 
 			template <class T>
-			Binding(KeyT key, T* target, RetT(T::*fPtr)(ArgTs...)) :
-				key(key),
-				delegate([&target, fPtr](ArgTs... args) {
-				return (target->*fPtr)(args...); 
-			}) {
+			Binding(KeyT key, T* target, RetT(T::*fPtr)(ParamTs...)) {
+				this->key = key;
+				this->delegate = [&target, fPtr](ParamTs... args) {
+					return (target->*fPtr)(args...);
+				};
 			}
 		};
 
@@ -75,43 +75,59 @@ namespace OXFEDE {
 			return *this;
 		}
 
-		int size() const {
-			return bindings.size();
-		}
-
 	protected:
-		std::map<KeyT, Delegate> bindings;
+		struct Container {
+			Event event;
+		};
+
+		std::unordered_map<KeyT, Delegate> bindings;
 
 		Event() = default;
+		Event(const Event& from) = default;
+		Event(Event&& from) = default;
+		Event& operator=(const Event& from) = default;
+		Event& operator=(Event&& from) = default;
 		~Event() = default;
 
-		void operator()(ArgTs... args) {
+		void operator()(ParamTs... args) {
 			auto temp = bindings;
 			for (auto binding : temp) {
 				binding.second(args...);
 			}
 		}
 
-		void clear() {
-			bindings.clear();
+		void operator()(std::vector<RetT>& results, ParamTs... args) {
+			auto temp = bindings;
+			for (auto binding : temp) {
+				results.push_back(binding.second(args...));
+			}
 		}
 	};
 
-	template<class OwnerT, class IdxT, class KeyT, class SigT>
+	template <class OwnerT, class IdxT, class KeyT, class SigT>
 	class MultiEvent;
 
-	template<class OwnerT, class IdxT, class KeyT, class RetT, class... ArgTs>
-	class MultiEvent<OwnerT, IdxT, KeyT, RetT(ArgTs...)> {
+	template <class OwnerT, class IdxT, class KeyT, class RetT, class... ParamTs>
+	class MultiEvent<OwnerT, IdxT, KeyT, RetT(ParamTs...)> {
+
+		friend OwnerT;
 
 	public:
-		using EventT = Event<OwnerT, KeyT, RetT(ArgTs...)>;
+		using EventType = Event<OwnerT, KeyT, RetT(ParamTs...)>;
 
-		EventT& operator[](IdxT idx) {
-			return events[idx];
+		EventType& operator[](IdxT idx) {
+			return events[idx].event;
 		}
 
 	protected:
-		std::unordered_map<IdxT, EventT> events;
+		std::unordered_map<IdxT, typename EventType::Container> events;
+
+		MultiEvent() = default;
+		MultiEvent(const MultiEvent& from) = default;
+		MultiEvent(MultiEvent&& from) = default;
+		MultiEvent& operator=(const MultiEvent& from) = default;
+		MultiEvent& operator=(MultiEvent&& from) = default;
+		~MultiEvent() = default;
 	};
 
 }
