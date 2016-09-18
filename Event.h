@@ -59,7 +59,7 @@ namespace OXFEDE {
 			template <class T>
 			Binding(KeyT key, T* target, RetT(T::*fPtr)(ParamTs...)) {
 				this->key = key;
-				this->delegate = [&target, fPtr](ParamTs... args) {
+				this->delegate = [target, fPtr](ParamTs... args) {
 					return (target->*fPtr)(args...);
 				};
 			}
